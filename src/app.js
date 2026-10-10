@@ -3,13 +3,21 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 
+const authRoutes = require("./routes/authRoutes");
+const userRoutes = require("./routes/userRoutes");
+const branchRoutes = require("./routes/branchRoutes");
+
+const errorHandler = require("./middlewares/errorHandler");
+
 const app = express();
 
 app.disable("x-powered-by");
 
 app.use(helmet());
 
-const allowedOrigins = (process.env.CLIENT_URL || "")
+const allowedOrigins = (
+  process.env.CLIENT_URL || "http://localhost:5173"
+)
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -20,24 +28,36 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "1mb" }));
-
 app.use(
-  "/api",
-  rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 300,
-    standardHeaders: "draft-8",
-    legacyHeaders: false,
+  express.json({
+    limit: "1mb",
   })
 );
 
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+
+  limit: 300,
+
+  standardHeaders: "draft-8",
+
+  legacyHeaders: false,
+});
+
+app.use("/api", apiLimiter);
+
 app.get("/api/health", (req, res) => {
-  res.status(200).json({
+  res.json({
     success: true,
     message: "JOHNBITRACO API is running",
   });
 });
+
+app.use("/api/auth", authRoutes);
+
+app.use("/api/users", userRoutes);
+
+app.use("/api/branches", branchRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
@@ -46,16 +66,6 @@ app.use((req, res) => {
   });
 });
 
-app.use((err, req, res, next) => {
-  console.error(err);
-
-  res.status(err.status || 500).json({
-    success: false,
-    message:
-      process.env.NODE_ENV === "production"
-        ? "An error occurred"
-        : err.message,
-  });
-});
+app.use(errorHandler);
 
 module.exports = app;

@@ -18,8 +18,8 @@ const branchSchema = new mongoose.Schema(
 
     location: {
       type: String,
-      default: "",
       trim: true,
+      default: "",
     },
 
     isActive: {
@@ -27,7 +27,9 @@ const branchSchema = new mongoose.Schema(
       default: true,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
 module.exports = mongoose.model("Branch", branchSchema);
