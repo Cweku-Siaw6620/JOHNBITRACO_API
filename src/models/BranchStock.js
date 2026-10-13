@@ -1,3 +1,4 @@
+
 const mongoose = require("mongoose");
 
 const branchStockSchema = new mongoose.Schema(
@@ -17,25 +18,44 @@ const branchStockSchema = new mongoose.Schema(
     quantity: {
       type: Number,
       required: true,
-      min: 0,
       default: 0,
-      validate: Number.isInteger,
+      min: 0,
+      validate: Number.isSafeInteger,
     },
 
     lowStockThreshold: {
       type: Number,
       default: 5,
       min: 0,
-      validate: Number.isInteger,
+      validate: Number.isSafeInteger,
+    },
+
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
+// One stock record per variant per branch.
 branchStockSchema.index(
-  { branch: 1, variant: 1 },
-  { unique: true }
+  {
+    branch: 1,
+    variant: 1,
+  },
+  {
+    unique: true,
+  }
 );
+
+branchStockSchema.index({
+  branch: 1,
+  quantity: 1,
+});
 
 module.exports = mongoose.model(
   "BranchStock",

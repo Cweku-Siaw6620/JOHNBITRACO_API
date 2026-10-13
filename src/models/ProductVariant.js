@@ -1,3 +1,4 @@
+
 const mongoose = require("mongoose");
 
 const productVariantSchema = new mongoose.Schema(
@@ -11,33 +12,48 @@ const productVariantSchema = new mongoose.Schema(
     sku: {
       type: String,
       required: true,
-      unique: true,
       uppercase: true,
       trim: true,
+      maxlength: 60,
     },
 
     size: {
       type: String,
       required: true,
       trim: true,
+      maxlength: 20,
     },
 
     color: {
       type: String,
       required: true,
       trim: true,
+      lowercase: true,
+      maxlength: 50,
     },
 
+    // All monetary values are in pesewas.
     retailPrice: {
       type: Number,
       required: true,
       min: 0,
+      validate: Number.isSafeInteger,
     },
 
     wholesalePrice: {
       type: Number,
       required: true,
       min: 0,
+      validate: Number.isSafeInteger,
+    },
+
+    // Reference cost, not the official cost of
+    // historical sales or inventory purchases.
+    referenceCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: Number.isSafeInteger,
     },
 
     isActive: {
@@ -45,12 +61,28 @@ const productVariantSchema = new mongoose.Schema(
       default: true,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
+// Every SKU must be globally unique.
 productVariantSchema.index(
-  { product: 1, size: 1, color: 1 },
+  { sku: 1 },
   { unique: true }
+);
+
+// Prevent duplicate size/color combinations
+// for the same product.
+productVariantSchema.index(
+  {
+    product: 1,
+    size: 1,
+    color: 1,
+  },
+  {
+    unique: true,
+  }
 );
 
 module.exports = mongoose.model(

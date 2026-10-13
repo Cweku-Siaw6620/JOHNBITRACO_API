@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const inventoryRoutes = require("./routes/inventoryRoutes");
+const productRoutes = require("./routes/productRoutes");
 
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
@@ -54,10 +56,10 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
-
 app.use("/api/users", userRoutes);
-
 app.use("/api/branches", branchRoutes);
+app.use("/api/inventory", inventoryRoutes);
+app.use("/api/products", productRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
