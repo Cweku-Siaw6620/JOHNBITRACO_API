@@ -49,6 +49,13 @@ const saleItemSchema = new mongoose.Schema(
       required: true,
     },
 
+    costOfGoodsSold: {
+      type: Number,
+      min: 0,
+      default: null,
+      validate: Number.isSafeInteger,
+    },
+
     unitPrice: moneyField,
 
     lineTotal: moneyField,
@@ -131,6 +138,19 @@ const saleSchema = new mongoose.Schema(
     soldAt: {
       type: Date,
       default: Date.now,
+    },
+    
+    costOfGoodsSold: {
+      type: Number,
+      min: 0,
+      default: null,
+      validate: Number.isSafeInteger,
+    },
+
+    grossProfit: {
+      type: Number,
+      default: null,
+      validate: Number.isSafeInteger,
     },
 
     createdBy: {

@@ -12,6 +12,7 @@ const supplierRoutes = require("./routes/supplierRoutes");
 const purchaseRoutes = require("./routes/purchaseRoutes");
 const customerRoutes = require("./routes/customerRoutes");
 const saleRoutes = require("./routes/saleRoutes");
+const expenseRoutes = require("./routes/expenseRoutes");
 
 const errorHandler = require("./middlewares/errorHandler");
 
@@ -68,6 +69,7 @@ app.use("/api/suppliers", supplierRoutes);
 app.use("/api/purchases", purchaseRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/sales", saleRoutes);
+app.use("/api/expenses", expenseRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

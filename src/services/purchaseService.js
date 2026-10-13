@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const Branch = require("../models/Branch");
 const Supplier = require("../models/Supplier");
 const ProductVariant = require("../models/ProductVariant");
-const BranchStock = require("../models/BranchStock");
+const { receiveStock } = require("./inventoryCostService");
 const StockMovement = require("../models/StockMovement");
 const Purchase = require("../models/Purchase");
 const SupplierPayment = require("../models/SupplierPayment");
@@ -153,33 +153,14 @@ const createPurchase = async ({
       // 7. Increase receiving branch's stock.
       // Each update includes its matching movement.
       for (const item of purchaseItems) {
-        const stock = await BranchStock.findOneAndUpdate(
-          {
-            branch: branchId,
-            variant: item.variant,
-          },
-          {
-            $inc: {
-              quantity: item.quantity,
-            },
-            $set: {
-              updatedBy: performedBy,
-            },
-            $setOnInsert: {
-              lowStockThreshold: 5,
-            },
-          },
-          {
-            new: true,
-            upsert: true,
-            runValidators: true,
-            session,
-          }
-        );
-
-        const quantityAfter = stock.quantity;
-        const quantityBefore =
-          quantityAfter - item.quantity;
+        const receipt = await receiveStock({
+          branchId,
+          variantId: item.variant,
+          quantity: item.quantity,
+          unitCost: item.unitCost,
+          performedBy,
+          session,
+        });
 
         await StockMovement.create(
           [
@@ -188,8 +169,8 @@ const createPurchase = async ({
               variant: item.variant,
               type: "PURCHASE",
               quantityChange: item.quantity,
-              quantityBefore,
-              quantityAfter,
+              quantityBefore: receipt.quantityBefore,
+              quantityAfter: receipt.quantityAfter,
               reason: `Supplier purchase ${purchase._id}`,
               referenceType: "Purchase",
               referenceId: purchase._id,

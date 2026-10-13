@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const Branch = require("../models/Branch");
 const Customer = require("../models/Customer");
 const ProductVariant = require("../models/ProductVariant");
-const BranchStock = require("../models/BranchStock");
+const { issueStock } = require("./inventoryCostService");
 const StockMovement = require("../models/StockMovement");
 const Sale = require("../models/Sale");
 const CustomerPayment = require("../models/CustomerPayment");
@@ -58,6 +58,7 @@ const createSale = async ({
       }
 
       const saleItems = [];
+      let totalCOGS = 0;
       const seen = new Set();
       let subtotal = 0;
 
@@ -163,34 +164,21 @@ const createSale = async ({
 
       // Deduct each variant from the receiving branch.
       for (const item of saleItems) {
-        const stock = await BranchStock
-          .findOneAndUpdate(
-            {
-              branch: branchId,
-              variant: item.variant,
-              quantity: { $gte: item.quantity },
-            },
-            {
-              $inc: {
-                quantity: -item.quantity,
-              },
-              $set: {
-                updatedBy: performedBy,
-              },
-            },
-            {
-              new: true,
-              session,
-              runValidators: true,
-            }
-          );
-
-        if (!stock) {
-          fail(
-            `Insufficient stock for ${item.sku}`,
-            409
-          );
+        const deduction = await issueStock({
+          branchId,
+          variantId: item.variant,
+          quantity: item.quantity,
+          performedBy,
+          session,
+        });
+        item.costOfGoodsSold = deduction.costOfGoodsSold;
+        totalCOGS += deduction.costOfGoodsSold;
+        if (!Number.isSafeInteger(totalCOGS)) {
+          fail("Sale COGS exceeds safe limit");
         }
+        // Persist historical cost per line; no recalculation after prices change.
+        const line = sale.items.find(x => x.variant.toString() === item.variant.toString());
+        line.costOfGoodsSold = deduction.costOfGoodsSold;
 
         await StockMovement.create(
           [
@@ -199,9 +187,8 @@ const createSale = async ({
               variant: item.variant,
               type: "SALE",
               quantityChange: -item.quantity,
-              quantityBefore:
-                stock.quantity + item.quantity,
-              quantityAfter: stock.quantity,
+              quantityBefore: deduction.quantityBefore,
+              quantityAfter: deduction.quantityAfter,
               reason: `Sale ${sale._id}`,
               referenceType: "Sale",
               referenceId: sale._id,
@@ -211,6 +198,10 @@ const createSale = async ({
           { session }
         );
       }
+
+      sale.costOfGoodsSold = totalCOGS;
+      sale.grossProfit = sale.total - totalCOGS;
+      await sale.save({ session });
 
       if (amountPaid > 0) {
         await CustomerPayment.create(
