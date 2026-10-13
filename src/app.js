@@ -8,6 +8,10 @@ const productRoutes = require("./routes/productRoutes");
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const branchRoutes = require("./routes/branchRoutes");
+const supplierRoutes = require("./routes/supplierRoutes");
+const purchaseRoutes = require("./routes/purchaseRoutes");
+const customerRoutes = require("./routes/customerRoutes");
+const saleRoutes = require("./routes/saleRoutes");
 
 const errorHandler = require("./middlewares/errorHandler");
 
@@ -60,6 +64,10 @@ app.use("/api/users", userRoutes);
 app.use("/api/branches", branchRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/products", productRoutes);
+app.use("/api/suppliers", supplierRoutes);
+app.use("/api/purchases", purchaseRoutes);
+app.use("/api/customers", customerRoutes);
+app.use("/api/sales", saleRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
