@@ -1,11 +1,9 @@
 const mongoose = require("mongoose");
 
 const Sale = require("../models/Sale");
-const Purchase = require("../models/Purchase");
 const Expense = require("../models/Expense");
 const BranchStock = require("../models/BranchStock");
 const CustomerPayment = require("../models/CustomerPayment");
-const SupplierPayment = require("../models/SupplierPayment");
 
 function sumField(field) {
   return { $sum: `$${field}` };
@@ -55,11 +53,6 @@ async function getDashboard({ branchId, start, endExclusive }) {
     ...dateFilter("soldAt", start, endExclusive),
   };
 
-  const purchaseMatch = {
-    ...branch,
-    ...dateFilter("purchasedAt", start, endExclusive),
-  };
-
   const expenseMatch = {
     ...branch,
     status: "posted",
@@ -71,21 +64,13 @@ async function getDashboard({ branchId, start, endExclusive }) {
     ...dateFilter("paidAt", start, endExclusive),
   };
 
-  const supplierPaymentMatch = {
-    ...branch,
-    ...dateFilter("paidAt", start, endExclusive),
-  };
-
   // Debts and inventory below are CURRENT balances, not historical snapshots.
   const [
     saleTotals,
     missingCostSales,
-    purchaseTotals,
     expenseTotals,
     customerCash,
-    supplierCash,
     customerDebt,
-    supplierDebt,
     stockTotals,
     missingValuation,
     lowStock,
@@ -105,10 +90,6 @@ async function getDashboard({ branchId, start, endExclusive }) {
       ],
     }),
 
-    aggregateOne(Purchase, purchaseMatch, {
-      purchaseValue: sumField("totalCost"),
-    }),
-
     aggregateOne(Expense, expenseMatch, {
       operatingExpenses: sumField("amount"),
     }),
@@ -117,16 +98,8 @@ async function getDashboard({ branchId, start, endExclusive }) {
       cashReceived: sumField("amount"),
     }),
 
-    aggregateOne(SupplierPayment, supplierPaymentMatch, {
-      supplierPayments: sumField("amount"),
-    }),
-
     aggregateOne(Sale, { ...branch, balanceDue: { $gt: 0 } }, {
       outstandingReceivables: sumField("balanceDue"),
-    }),
-
-    aggregateOne(Purchase, { ...branch, balanceDue: { $gt: 0 } }, {
-      outstandingPayables: sumField("balanceDue"),
     }),
 
     aggregateOne(BranchStock, branch, {
@@ -187,8 +160,6 @@ async function getDashboard({ branchId, start, endExclusive }) {
     performance: {
       revenue,
       salesCount: saleTotals.count,
-      purchasesValue: purchaseTotals.purchaseValue || 0,
-      purchasesCount: purchaseTotals.count,
       operatingExpenses: expenses,
       expenseCount: expenseTotals.count,
       costOfGoodsSold: profitsComplete ? cogs : null,
@@ -199,16 +170,13 @@ async function getDashboard({ branchId, start, endExclusive }) {
     },
     paymentsInPeriod: {
       customerPaymentsReceived: customerCash.cashReceived || 0,
-      supplierPaymentsMade: supplierCash.supplierPayments || 0,
       operatingExpensesPaid: expenses,
       // This is an activity subtotal, not a reconciled bank/cash balance.
       netRecordedPaymentActivity:
-        (customerCash.cashReceived || 0) -
-        (supplierCash.supplierPayments || 0) - expenses,
+        (customerCash.cashReceived || 0) - expenses,
     },
     currentBalances: {
       customerDebt: customerDebt.outstandingReceivables || 0,
-      supplierDebt: supplierDebt.outstandingPayables || 0,
       inventoryPairs: stockTotals.totalPairs || 0,
       inventoryValue: valuationComplete
         ? (stockTotals.knownInventoryValue || 0)

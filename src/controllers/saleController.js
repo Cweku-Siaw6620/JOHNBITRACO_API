@@ -1,6 +1,8 @@
 
 const mongoose = require("mongoose");
 
+const { salesQuerySchema, debtQuerySchema } = require("../validators/saleQueryValidators");
+
 const Sale = require("../models/Sale");
 const CustomerPayment = require(
   "../models/CustomerPayment"
@@ -74,61 +76,97 @@ const create = async (req, res, next) => {
   }
 };
 
-const getSales = async (req, res, next) => {
-  try {
-    const page = Number(req.query.page || 1);
-    const limit = Number(req.query.limit || 20);
+// MongoDB stores dates in UTC. Reporting dates use Ghana's UTC day boundaries.
+function createDateRange(startDate, endDate) {
+  if (!startDate && !endDate) return null;
 
+  const range = {};
+
+  if (startDate) {
+    range.$gte = new Date(`${startDate}T00:00:00.000Z`);
+  }
+
+  if (endDate) {
+    const exclusiveEnd = new Date(`${endDate}T00:00:00.000Z`);
+    exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
+    range.$lt = exclusiveEnd;
+  }
+
+  return range;
+}
+
+function resolveBranchFilter(req, branchId) {
+  const userBranch = req.user.branch?._id || req.user.branch;
+
+  if (req.user.role === "assistant") {
     if (
-      !Number.isSafeInteger(page) ||
-      page < 1 ||
-      !Number.isSafeInteger(limit) ||
-      limit < 1 ||
-      limit > 100
+      branchId &&
+      String(branchId).toLowerCase() !== String(userBranch).toLowerCase()
     ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid pagination",
-      });
+      const error = new Error("Branch access denied");
+      error.status = 403;
+      throw error;
     }
 
-    const filter = {};
-
-    if (req.user.role === "assistant") {
-      filter.branch = req.user.branch;
-
-      if (
-        req.query.branchId &&
-        !canAccessBranch(
-          req.user,
-          req.query.branchId
-        )
-      ) {
-        return res.status(403).json({
-          success: false,
-          message: "Branch access denied",
-        });
-      }
-    } else if (req.query.branchId) {
-      if (!mongoose.isValidObjectId(req.query.branchId)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid branch ID",
-        });
-      }
-
-      filter.branch = req.query.branchId;
+    if (!userBranch) {
+      const error = new Error("Assigned branch is missing");
+      error.status = 403;
+      throw error;
     }
+
+    return new mongoose.Types.ObjectId(String(userBranch));
+  }
+
+  return branchId
+    ? new mongoose.Types.ObjectId(branchId)
+    : undefined;
+}
+
+function respondQueryError(res, parsed) {
+  return res.status(400).json({
+    success: false,
+    message: "Invalid query parameters",
+    errors: parsed.error.issues,
+  });
+}
+
+function handleKnownError(error, res, next) {
+  if (error.status === 403) {
+    return res.status(403).json({ success: false, message: error.message });
+  }
+
+  next(error);
+}
+
+function buildSalesFilter(req, query) {
+  const filter = {};
+  const branch = resolveBranchFilter(req, query.branchId);
+
+  if (branch) filter.branch = branch;
+
+  const soldAt = createDateRange(query.startDate, query.endDate);
+  if (soldAt) filter.soldAt = soldAt;
+
+  return filter;
+}
+
+// GET /api/sales — date-filtered and paginated transaction history.
+const getSales = async (req, res, next) => {
+  const parsed = salesQuerySchema.safeParse(req.query);
+  if (!parsed.success) return respondQueryError(res, parsed);
+
+  try {
+    const { page, limit } = parsed.data;
+    const filter = buildSalesFilter(req, parsed.data);
 
     const [sales, total] = await Promise.all([
       Sale.find(filter)
         .populate("branch", "name code")
         .populate("customer", "name phone")
-        .sort({ soldAt: -1 })
+        .sort({ soldAt: -1, _id: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
         .lean(),
-
       Sale.countDocuments(filter),
     ]);
 
@@ -141,70 +179,109 @@ const getSales = async (req, res, next) => {
       sales,
     });
   } catch (error) {
-    next(error);
+    return handleKnownError(error, res, next);
   }
 };
 
-const getDebts = async (req, res, next) => {
+// GET /api/sales/summary — totals across ALL matching sales, not one page.
+// Payments received are cumulative against these sales, not cash collected
+// specifically on the selected day. Separate payment-date reporting is needed
+// for a daily cash-flow report.
+const getSalesSummary = async (req, res, next) => {
+  const parsed = salesQuerySchema.safeParse(req.query);
+  if (!parsed.success) return respondQueryError(res, parsed);
+
   try {
-    const filter = {
-      balanceDue: { $gt: 0 },
-    };
+    const filter = buildSalesFilter(req, parsed.data);
 
-    if (req.user.role === "assistant") {
-      filter.branch = req.user.branch;
-
-      if (
-        req.query.branchId &&
-        !canAccessBranch(
-          req.user,
-          req.query.branchId
-        )
-      ) {
-        return res.status(403).json({
-          success: false,
-          message: "Branch access denied",
-        });
-      }
-    } else if (req.query.branchId) {
-      if (!mongoose.isValidObjectId(req.query.branchId)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid branch ID",
-        });
-      }
-
-      filter.branch = req.query.branchId;
-    }
-
-    const totals = await Sale.aggregate([
+    const [result] = await Sale.aggregate([
       { $match: filter },
       {
         $group: {
           _id: null,
-          totalDebt: { $sum: "$balanceDue" },
-          numberOfSales: { $sum: 1 },
+          transactions: { $sum: 1 },
+          revenue: { $sum: "$total" },
+          amountPaid: { $sum: "$amountPaid" },
+          balanceDue: { $sum: "$balanceDue" },
+          itemsSold: {
+            $sum: {
+              $sum: {
+                $map: {
+                  input: "$items",
+                  as: "item",
+                  in: "$$item.quantity",
+                },
+              },
+            },
+          },
         },
       },
     ]);
 
-    const debts = await Sale.find(filter)
-      .populate("customer", "name phone")
-      .populate("branch", "name code")
-      .sort({ soldAt: -1 })
-      .limit(100)
-      .lean();
+    return res.json({
+      success: true,
+      summary: {
+        transactions: result?.transactions || 0,
+        revenue: result?.revenue || 0,
+        amountPaid: result?.amountPaid || 0,
+        balanceDue: result?.balanceDue || 0,
+        itemsSold: result?.itemsSold || 0,
+      },
+    });
+  } catch (error) {
+    return handleKnownError(error, res, next);
+  }
+};
+
+// GET /api/sales/debts — accurate totals and database-backed pages.
+const getDebts = async (req, res, next) => {
+  const parsed = debtQuerySchema.safeParse(req.query);
+  if (!parsed.success) return respondQueryError(res, parsed);
+
+  try {
+    const { page, limit } = parsed.data;
+    const filter = {
+      balanceDue: { $gt: 0 },
+    };
+
+    const branch = resolveBranchFilter(req, parsed.data.branchId);
+    if (branch) filter.branch = branch;
+
+    const [debts, total, aggregates] = await Promise.all([
+      Sale.find(filter)
+        .populate("customer", "name phone")
+        .populate("branch", "name code")
+        .sort({ soldAt: -1, _id: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Sale.countDocuments(filter),
+      Sale.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: null,
+            totalDebt: { $sum: "$balanceDue" },
+            numberOfSales: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
 
     return res.json({
       success: true,
-      summary: totals[0] || {
-        totalDebt: 0,
-        numberOfSales: 0,
+      summary: {
+        totalDebt: aggregates[0]?.totalDebt || 0,
+        numberOfSales: aggregates[0]?.numberOfSales || 0,
       },
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
       debts,
     });
   } catch (error) {
-    next(error);
+    return handleKnownError(error, res, next);
   }
 };
 
@@ -316,6 +393,7 @@ const addPayment = async (req, res, next) => {
 module.exports = {
   create,
   getSales,
+  getSalesSummary,
   getDebts,
   getSalePayments,
   addPayment,

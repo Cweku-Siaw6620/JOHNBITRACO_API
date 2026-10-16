@@ -12,6 +12,7 @@ const {
 const {
   create,
   getSales,
+  getSalesSummary,
   getDebts,
   getSalePayments,
   addPayment,
@@ -27,6 +28,7 @@ router.post("/", create);
 
 // Specific routes before parameterized routes.
 router.get("/debts", getDebts);
+router.get("/summary", getSalesSummary);
 
 router.get("/:id/payments", getSalePayments);
 router.post("/:id/payments", addPayment);

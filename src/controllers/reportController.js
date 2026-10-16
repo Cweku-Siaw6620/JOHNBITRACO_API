@@ -66,4 +66,35 @@ async function report(req, res, next, kind) {
 const financialPdfReport = (req, res, next) => report(req, res, next, "pdf");
 const financialExcelReport = (req, res, next) => report(req, res, next, "xlsx");
 
-module.exports = { receipt, financialPdfReport, financialExcelReport };
+
+async function financialJsonReport(req, res, next) {
+  try {
+    const parsed = dashboardQuerySchema.safeParse(req.query);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid report filters",
+        errors: parsed.error.issues,
+      });
+    }
+
+    const { startDate, endDate, branchId } = parsed.data;
+    const effectiveBranch = getBranchId(req, branchId);
+    const { dateBounds } = require("../utils/reportFormat");
+    const { getDashboard } = require("../services/dashboardService");
+    const { start, endExclusive } = dateBounds(startDate, endDate);
+
+    const dashboard = await getDashboard({
+      branchId: effectiveBranch,
+      start,
+      endExclusive,
+    });
+
+    return res.json({ success: true, dashboard });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { receipt, financialPdfReport, financialExcelReport, financialJsonReport };

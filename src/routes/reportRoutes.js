@@ -5,6 +5,7 @@ const {
   receipt,
   financialPdfReport,
   financialExcelReport,
+  financialJsonReport,
 } = require("../controllers/reportController");
 
 const router = express.Router();
@@ -13,6 +14,7 @@ router.use(authenticate);
 router.use(authorize("admin", "assistant"));
 
 router.get("/sales/:id/receipt.pdf", receipt);
+router.get("/financial", financialJsonReport);
 router.get("/financial.pdf", financialPdfReport);
 router.get("/financial.xlsx", financialExcelReport);
 

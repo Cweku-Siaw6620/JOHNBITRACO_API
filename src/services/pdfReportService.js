@@ -104,7 +104,6 @@ function financialPdf(res, data) {
   section(doc, "Performance in selected period");
   line(doc, "Sales revenue", ghs(p.revenue));
   line(doc, "Number of sales", String(p.salesCount));
-  line(doc, "Supplier purchases (not expenses)", ghs(p.purchasesValue));
   line(doc, "Cost of goods sold", ghs(p.costOfGoodsSold));
   line(doc, "Gross profit", ghs(p.grossProfit), { highlight: true });
   line(doc, "Operating expenses", ghs(p.operatingExpenses));
@@ -112,13 +111,11 @@ function financialPdf(res, data) {
 
   section(doc, "Recorded payment activity in selected period");
   line(doc, "Customer payments received", ghs(pay.customerPaymentsReceived));
-  line(doc, "Supplier payments made", ghs(pay.supplierPaymentsMade));
   line(doc, "Operating expenses paid", ghs(pay.operatingExpensesPaid));
   line(doc, "Net recorded payment activity", ghs(pay.netRecordedPaymentActivity));
 
   section(doc, "Current balances (not historical snapshots)");
   line(doc, "Customer debt", ghs(bal.customerDebt));
-  line(doc, "Supplier debt", ghs(bal.supplierDebt));
   line(doc, "Inventory pairs", String(bal.inventoryPairs));
   line(doc, "Inventory value", ghs(bal.inventoryValue));
   line(doc, "Low-stock variants", String(bal.lowStockVariants));

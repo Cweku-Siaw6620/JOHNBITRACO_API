@@ -1,4 +1,3 @@
-
 const mongoose = require("mongoose");
 
 const expenseSchema = new mongoose.Schema(
@@ -11,30 +10,17 @@ const expenseSchema = new mongoose.Schema(
 
     category: {
       type: String,
+      enum: ["rent", "electricity", "water", "salaries", "transport", "packaging", "repairs", "internet", "marketing", "utilities", "other"],
       required: true,
-      enum: [
-        "rent",
-        "electricity",
-        "water",
-        "salaries",
-        "transport",
-        "packaging",
-        "repairs",
-        "internet",
-        "marketing",
-        "utilities",
-        "other",
-      ],
     },
 
     description: {
       type: String,
-      required: true,
       trim: true,
+      required: true,
       maxlength: 500,
     },
 
-    // Amount is stored in pesewas.
     amount: {
       type: Number,
       required: true,
@@ -44,8 +30,8 @@ const expenseSchema = new mongoose.Schema(
 
     paymentMethod: {
       type: String,
-      required: true,
       enum: ["cash", "momo", "bank"],
+      required: true,
     },
 
     paymentReference: {
@@ -73,47 +59,16 @@ const expenseSchema = new mongoose.Schema(
       maxlength: 500,
     },
 
-    reversedAt: {
-      type: Date,
-      default: null,
-    },
+    reversedAt: { type: Date, default: null },
+    reversedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
 
-    reversedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-
-    requestKey: {
-      type: String,
-      required: true,
-      unique: true,
-    },
-
-    recordedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
+    requestKey: { type: String, required: true, unique: true },
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   },
   { timestamps: true }
 );
 
-expenseSchema.index({
-  branch: 1,
-  expenseDate: -1,
-});
+expenseSchema.index({ branch: 1, expenseDate: -1 });
+expenseSchema.index({ status: 1, expenseDate: -1 });
 
-expenseSchema.index({
-  category: 1,
-  expenseDate: -1,
-});
-
-expenseSchema.index({
-  status: 1,
-});
-
-module.exports = mongoose.model(
-  "Expense",
-  expenseSchema
-);
+module.exports = mongoose.model("Expense", expenseSchema);
