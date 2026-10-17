@@ -1,11 +1,43 @@
 
 const mongoose = require("mongoose");
 
+// Money values are stored as integer pesewas.
 const moneyField = {
   type: Number,
   required: true,
   min: 0,
   validate: Number.isSafeInteger,
+};
+
+// Allows null when a cost has not yet been calculated.
+const nullableCostField = {
+  type: Number,
+  min: 0,
+  default: null,
+  validate: {
+    validator(value) {
+      return (
+        value === null ||
+        (Number.isSafeInteger(value) && value >= 0)
+      );
+    },
+    message: "Cost must be a non-negative integer or null",
+  },
+};
+
+// Gross profit can be negative if a sale is made at a loss.
+const nullableProfitField = {
+  type: Number,
+  default: null,
+  validate: {
+    validator(value) {
+      return (
+        value === null ||
+        Number.isSafeInteger(value)
+      );
+    },
+    message: "Gross profit must be an integer or null",
+  },
 };
 
 const saleItemSchema = new mongoose.Schema(
@@ -49,18 +81,15 @@ const saleItemSchema = new mongoose.Schema(
       required: true,
     },
 
-    costOfGoodsSold: {
-      type: Number,
-      min: 0,
-      default: null,
-      validate: Number.isSafeInteger,
-    },
+    costOfGoodsSold: nullableCostField,
 
     unitPrice: moneyField,
 
     lineTotal: moneyField,
   },
-  { _id: false }
+  {
+    _id: false,
+  }
 );
 
 const saleSchema = new mongoose.Schema(
@@ -80,7 +109,9 @@ const saleSchema = new mongoose.Schema(
     items: {
       type: [saleItemSchema],
       validate: {
-        validator: items => items.length > 0,
+        validator(items) {
+          return items.length > 0;
+        },
         message: "Sale must contain items",
       },
     },
@@ -118,7 +149,11 @@ const saleSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["completed", "partially_returned", "returned"],
+      enum: [
+        "completed",
+        "partially_returned",
+        "returned",
+      ],
       default: "completed",
     },
 
@@ -139,19 +174,10 @@ const saleSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    
-    costOfGoodsSold: {
-      type: Number,
-      min: 0,
-      default: null,
-      validate: Number.isSafeInteger,
-    },
 
-    grossProfit: {
-      type: Number,
-      default: null,
-      validate: Number.isSafeInteger,
-    },
+    costOfGoodsSold: nullableCostField,
+
+    grossProfit: nullableProfitField,
 
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -159,7 +185,9 @@ const saleSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
 saleSchema.index({
