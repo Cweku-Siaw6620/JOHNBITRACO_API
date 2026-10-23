@@ -20,15 +20,11 @@ const {
   revokeAllUserSessions,
 } = require("../services/sessionService");
 
-const validateStaffBranch = async (branchId, role) => {
+const validateStaffBranch = async (branchId) => {
   const branch = await Branch.findById(branchId);
 
   if (!branch || !branch.isActive) {
     return "Invalid or inactive branch";
-  }
-
-  if (role === "assistant" && branch.code !== "MAIN") {
-    return "Assistants must belong to Main Branch";
   }
 
   return null;
