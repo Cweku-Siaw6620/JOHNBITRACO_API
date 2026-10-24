@@ -53,18 +53,6 @@ const authenticate = async (req, res, next) => {
           message: "Assigned branch unavailable",
         });
       }
-
-      // Prevent the assistant from being moved away
-      // from the designated Main Branch.
-      if (
-        user.role === "assistant" &&
-        branch.code !== "MAIN"
-      ) {
-        return res.status(403).json({
-          success: false,
-          message: "Invalid assistant branch assignment",
-        });
-      }
     }
 
     req.user = user;
