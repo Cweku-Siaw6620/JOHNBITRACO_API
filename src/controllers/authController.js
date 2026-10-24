@@ -129,24 +129,19 @@ const login = async (req, res, next) => {
       return respondInvalid(res);
     }
 
-    // Validate branch assignment before issuing a session.
     if (role !== "admin") {
       const Branch = require("../models/Branch");
 
       const branch = await Branch.findById(user.branch);
 
-      if (
-        !branch ||
-        !branch.isActive ||
-        (role === "assistant" && branch.code !== "MAIN")
-      ) {
+      if (!branch || !branch.isActive) {
         return res.status(403).json({
           success: false,
           message: "Assigned branch unavailable",
         });
       }
     }
-
+    
     await User.updateOne(
       { _id: user._id },
       {
