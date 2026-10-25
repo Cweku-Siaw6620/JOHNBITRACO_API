@@ -47,7 +47,7 @@ router.post(
 // Admin and Assistant can adjust permitted stock.
 router.post(
   "/adjustments",
-  authorize("admin", "assistant"),
+  authorize("admin"),
   createAdjustment
 );
 
