@@ -20,12 +20,8 @@ const productSchema = new mongoose.Schema(
     category: {
       type: String,
       required: true,
-      enum: [
-        "Executive",
-        "Loafers",
-        "Boots",
-        "Other",
-      ],
+      trim: true,
+      maxlength: 100,
     },
 
     description: {

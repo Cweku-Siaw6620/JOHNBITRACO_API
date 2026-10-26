@@ -59,8 +59,9 @@ const getProducts = async (req, res, next) => {
 
     if (category) {
       if (
-        !["Executive", "Loafers", "Boots", "Other"]
-          .includes(category)
+        typeof category !== "string" ||
+        !category.trim() ||
+        category.length > 100
       ) {
         return res.status(400).json({
           success: false,
@@ -68,7 +69,7 @@ const getProducts = async (req, res, next) => {
         });
       }
 
-      filter.category = category;
+      filter.category = category.trim();
     }
 
     if (search.trim()) {

@@ -31,12 +31,7 @@ const productSchema = z.object({
     .max(100)
     .optional(),
 
-  category: z.enum([
-    "Executive",
-    "Loafers",
-    "Boots",
-    "Other",
-  ]),
+  category: z.string().trim().min(1).max(100),
 
   description: z.string()
     .trim()
@@ -176,12 +171,12 @@ const inventoryQuerySchema = z.object({
     .max(100)
     .optional(),
 
-  category: z.enum([
-    "Executive",
-    "Loafers",
-    "Boots",
-    "Other",
-  ]).optional(),
+  // Allow any custom category
+  category: z.string()
+    .trim()
+    .min(1)
+    .max(100)
+    .optional(),
 
   lowStock: z.enum([
     "true",
@@ -199,6 +194,7 @@ const inventoryQuerySchema = z.object({
     .max(100)
     .default(20),
 }).strict();
+
 
 // =======================================
 // EXPORT VALIDATORS
