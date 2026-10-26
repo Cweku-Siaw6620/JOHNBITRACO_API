@@ -1,13 +1,21 @@
 
 const mongoose = require("mongoose");
+const { z } = require("zod");
 
 const Product = require("../models/Product");
 const ProductVariant = require("../models/ProductVariant");
 
 const {
   productSchema,
-  variantSchema,
 } = require("../validators/inventoryValidators");
+
+// Client-facing product registration includes prices, but not SKU, size or color.
+// Amounts are integer pesewas, as required by the existing pricing system.
+const productWithPricesSchema = productSchema.extend({
+  retailPrice: z.number().int().nonnegative().safe(),
+  wholesalePrice: z.number().int().nonnegative().safe(),
+  referenceCost: z.number().int().nonnegative().safe().optional(),
+});
 
 const objectIdValid = (id) => mongoose.isValidObjectId(id);
 
@@ -130,26 +138,81 @@ const getProductById = async (req, res, next) => {
 };
 
 // POST /api/products
+// Register one shoe design and exactly one internal stock item atomically.
 const createProduct = async (req, res, next) => {
+  const parsed = productWithPricesSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return sendValidationError(res, parsed.error);
+  }
+
+  const {
+    retailPrice,
+    wholesalePrice,
+    referenceCost = 0,
+    ...productFields
+  } = parsed.data;
+
+  const session = await mongoose.startSession();
+
   try {
-    const parsed = productSchema.safeParse(req.body);
+    let createdProduct;
+    let createdVariant;
 
-    if (!parsed.success) {
-      return sendValidationError(res, parsed.error);
-    }
+    await session.withTransaction(async () => {
+      // In the simplified catalog, a design is identified by brand + name.
+      // Reject duplicates even if the capitalization differs.
+      const exact = (value) =>
+        `^${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`;
 
-    const product = await Product.create({
-      ...parsed.data,
-      createdBy: req.user._id,
+      const duplicate = await Product.findOne({
+        isActive: true,
+        name: { $regex: exact(productFields.name), $options: "i" },
+        brand: { $regex: exact(productFields.brand || ""), $options: "i" },
+      }).session(session);
+
+      if (duplicate) {
+        const error = new Error(
+          "This brand and shoe name already exist. Update the existing product instead."
+        );
+        error.status = 409;
+        throw error;
+      }
+
+      const [product] = await Product.create(
+        [{ ...productFields, createdBy: req.user._id }],
+        { session }
+      );
+
+      // SKU, size and color remain internal only, to preserve compatibility
+      // with BranchStock, saleService and stock movement records.
+      const [variant] = await ProductVariant.create(
+        [{
+          product: product._id,
+          sku: `JB-${product._id.toString().toUpperCase()}`,
+          size: "ONE",
+          color: "standard",
+          retailPrice,
+          wholesalePrice,
+          referenceCost,
+        }],
+        { session }
+      );
+
+      createdProduct = product;
+      createdVariant = variant;
     });
 
     return res.status(201).json({
       success: true,
-      message: "Product created successfully",
-      product,
+      message: "Product and stock item created successfully",
+      product: createdProduct,
+      variant: createdVariant,
     });
   } catch (error) {
     next(error);
+  } finally {
+    await session.endSession();
   }
 };
 
@@ -210,46 +273,12 @@ const updateProduct = async (req, res, next) => {
 };
 
 // POST /api/products/:id/variants
-const createVariant = async (req, res, next) => {
-  try {
-    if (!objectIdValid(req.params.id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid product ID",
-      });
-    }
-
-    const parsed = variantSchema.safeParse(req.body);
-
-    if (!parsed.success) {
-      return sendValidationError(res, parsed.error);
-    }
-
-    const product = await Product.findOne({
-      _id: req.params.id,
-      isActive: true,
-    });
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Active product not found",
-      });
-    }
-
-    const variant = await ProductVariant.create({
-      ...parsed.data,
-      product: product._id,
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: "Product variant created successfully",
-      variant,
-    });
-  } catch (error) {
-    next(error);
-  }
+// Kept as a guarded legacy route; extra variants are no longer permitted.
+const createVariant = async (req, res) => {
+  return res.status(409).json({
+    success: false,
+    message: "Additional variants are disabled. Each shoe now has one stock item.",
+  });
 };
 
 // GET /api/products/:id/variants
@@ -301,9 +330,7 @@ const updateVariant = async (req, res, next) => {
       });
     }
 
-    // SKU, size, and color are immutable once created.
-    // This protects stock and historical references.
-    const { z } = require("zod");
+    // Internal identifiers remain immutable to protect stock and sale history.
 
     const schema = z.object({
       retailPrice: z.number().int().nonnegative().safe()

@@ -273,13 +273,20 @@ const getStockMovements = async (req, res, next) => {
     const [total, movements] = await Promise.all([
       StockMovement.countDocuments(filter),
 
-      StockMovement.find(filter)
-        .populate("performedBy", "fullName role")
-        .populate("variant", "sku size color")
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
+    StockMovement.find(filter)
+      .populate("performedBy", "fullName role")
+      .populate({
+        path: "variant",
+        select: "product",
+        populate: {
+          path: "product",
+          select: "name brand category",
+        },
+      })
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
     ]);
 
     return res.json({
