@@ -301,9 +301,44 @@ const getStockMovements = async (req, res, next) => {
   }
 };
 
+// Permanently delete one branch stock record. Movement history is retained.
+const deleteInventory = async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid inventory record ID",
+      });
+    }
+
+    const deleted = await BranchStock.findByIdAndDelete(req.params.id);
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        message: "Inventory record not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Inventory record permanently deleted",
+      deleted: {
+        id: deleted._id,
+        branchId: deleted.branch,
+        variantId: deleted.variant,
+        quantity: deleted.quantity,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createOpeningStock,
   createAdjustment,
   getInventory,
   getStockMovements,
+  deleteInventory,
 };

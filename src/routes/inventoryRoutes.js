@@ -14,6 +14,7 @@ const {
   createAdjustment,
   getInventory,
   getStockMovements,
+  deleteInventory,
 } = require("../controllers/inventoryController");
 
 const router = express.Router();
@@ -49,6 +50,13 @@ router.post(
   "/adjustments",
   authorize("admin"),
   createAdjustment
+);
+
+// Permanently delete a single branch inventory record (Admin only).
+router.delete(
+  "/:id",
+  authorize("admin"),
+  deleteInventory
 );
 
 module.exports = router;

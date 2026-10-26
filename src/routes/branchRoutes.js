@@ -10,6 +10,7 @@ const {
   getBranches,
   createBranch,
   updateBranch,
+  deleteBranch,
 } = require("../controllers/branchController");
 
 const router = express.Router();
@@ -32,6 +33,12 @@ router.patch(
   "/:id",
   authorize("admin"),
   updateBranch
+);
+
+router.delete(
+  "/:id",
+  authorize("admin"),
+  deleteBranch
 );
 
 module.exports = router;
